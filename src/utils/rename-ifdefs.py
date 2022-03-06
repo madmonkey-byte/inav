@@ -74,8 +74,8 @@ def replace_in_files(root):
                     data = f.read()
                 new_data = data
                 for name in RENAMES:
-                    new_name = NEW_NAMES.get(name, 'USE_' + name)
-                    repl = '\\1' + new_name + '\\2'
+                    new_name = NEW_NAMES.get(name, f'USE_{name}')
+                    repl = f'\\1{new_name}\\2'
                     for r in REPLS:
                         pattern = r.format(name)
                         new_data = re.sub(pattern, repl, new_data)

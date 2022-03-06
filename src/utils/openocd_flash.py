@@ -65,22 +65,22 @@ def main():
         if flag:
             openocd_args.append(arg)
             flag = None
+        elif arg.startswith('-'):
+            openocd_args.append(arg)
+            flag = arg
+        elif elf is None:
+            elf = arg
         else:
-            if arg.startswith('-'):
-                openocd_args.append(arg)
-                flag = arg
-            elif elf is None:
-                elf = arg
-            else:
-                usage()
+            usage()
 
-    if len(openocd_args) == 0 or elf is None:
+    if not openocd_args or elf is None:
         usage()
 
-    if not openocd_flash_telnet(port, elf):
-        if not openocd_flash_cmd(openocd, openocd_args, elf):
-            print('could not flash')
-            sys.exit(1)
+    if not openocd_flash_telnet(port, elf) and not openocd_flash_cmd(
+        openocd, openocd_args, elf
+    ):
+        print('could not flash')
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()

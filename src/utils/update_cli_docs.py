@@ -41,11 +41,17 @@ def parse_settings_yaml():
 def generate_md_from_yaml(settings_yaml):
     """Generate a sorted markdown table with description & default value for each setting"""
     params = {}
-    
+
     # Extract description, default/min/max values of each setting from the YAML specs (if present)
     for group in settings_yaml['groups']:
         for member in group['members']:
-            if not any(key in member for key in ["description", "default_value", "min", "max"]) and not options.quiet:
+            if (
+                all(
+                    key not in member
+                    for key in ["description", "default_value", "min", "max"]
+                )
+                and not options.quiet
+            ):
                 print("Setting \"{}\" has an incomplete specification".format(member['name']))
 
             # Handle default/min/max fields for each setting
@@ -83,18 +89,21 @@ def generate_md_from_yaml(settings_yaml):
                     "min": member["min"] if "min" in member else "",
                     "max": member["max"] if "max" in member else ""
                 }
-    
+
     # Sort the settings by name and build the doc
     output_lines = []
     for param in sorted(params.items()):
-        output_lines.extend([
-            f"### {param[0]}\n\n",
-            f"{param[1]['description'] if param[1]['description'] else '_// TODO_'}\n\n",
-            "| Default | Min | Max |\n| --- | --- | --- |\n",
-            f"| {param[1]['default']} | {param[1]['min']} | {param[1]['max']} |\n\n",
-            "---\n\n"
-        ])
-    
+        output_lines.extend(
+            [
+                f"### {param[0]}\n\n",
+                f'{param[1]["description"] or "_// TODO_"}\n\n',
+                "| Default | Min | Max |\n| --- | --- | --- |\n",
+                f"| {param[1]['default']} | {param[1]['min']} | {param[1]['max']} |\n\n",
+                "---\n\n",
+            ]
+        )
+
+
     # Return the assembled doc body
     return output_lines
 
@@ -108,9 +117,8 @@ def write_settings_md(lines):
 def regex_search(regex, files):
     for f in files:
         with open(f, 'r') as _f:
-            for _, line in enumerate(_f.readlines()):
-                matches = regex.search(line)
-                if matches:
+            for line in _f.readlines():
+                if matches := regex.search(line):
                     yield matches
 
 # Return plausible default values for a given setting found by scraping the relative source files
@@ -124,10 +132,9 @@ def find_default(setting_name, headers):
             header_c = re.sub(r'\.h$', '.c', header)
             if os.path.isfile(header_c):
                 files_to_search_in.append(header_c)
-    defaults = []
-    for matches in regex_search(regex, files_to_search_in):
-        defaults.append(matches.group(1))
-    return defaults
+    return [
+        matches.group(1) for matches in regex_search(regex, files_to_search_in)
+    ]
 
 # Try to map default values in the YAML spec back to the actual C code and check for mismatches (defaults updated in the code but not in the YAML)
 # Done by scraping the source files, prone to false negatives. Settings in `DEFAULTS_BLACKLIST` are ignored for this
@@ -156,14 +163,14 @@ def check_defaults(settings_yaml):
                 code_values_map = { 'true': 'ON', 'false': 'OFF' }
                 if default_from_code in code_values_map:
                     default_from_code = code_values_map[default_from_code]
-                
+
                 default_from_yaml = member["default_value"] if "default_value" in member else ""
                 # Remove eventual Markdown formatting
                 default_from_yaml = default_from_yaml.replace('`', '').replace('*', '').replace('__', '')
-                # Allow specific C-YAML matches that coudln't be replaced in the previous steps
-                extra_allowed_matches = { '1': 'ON', '0': 'OFF' }
-                
                 if default_from_yaml not in default_from_code: # Equal or substring
+                    # Allow specific C-YAML matches that coudln't be replaced in the previous steps
+                    extra_allowed_matches = { '1': 'ON', '0': 'OFF' }
+
                     if default_from_code in extra_allowed_matches and default_from_yaml in extra_allowed_matches[default_from_code]:
                         continue
                     if not options.quiet:
